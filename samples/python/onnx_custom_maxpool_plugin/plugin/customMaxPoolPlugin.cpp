@@ -85,9 +85,13 @@ constexpr char const* kMAXPOOL_NAME{"CustomMaxPool"};
 constexpr char const* kMAXPOOL_VERSION{"1"};
 } // namespace
 
-MaxPoolPlugin::MaxPoolPlugin(int32_t axis)
+MaxPoolPlugin::MaxPoolPlugin(int32_t ceil_mode, int32_t dilations, int32_t kernel_shape, int32_t pads, int32_t strides)
 {
-    mAxis = axis;
+    mCeilMode = ceil_mode;
+    mDilations = dilations;
+    mKernelShape = kernel_shape;
+    mPads = pads;
+    mStrides = strides;
 }
 
 MaxPoolPlugin::MaxPoolPlugin(void const* serialData, size_t serialLength)
@@ -95,7 +99,7 @@ MaxPoolPlugin::MaxPoolPlugin(void const* serialData, size_t serialLength)
     uint8_t const* d = static_cast<uint8_t const*>(serialData);
     uint8_t const* a = d;
 
-    mAxis = readFromBuffer<int32_t>(d);
+    // mAxis = readFromBuffer<int32_t>(d);
     mAxisSize = readFromBuffer<int32_t>(d);
     mDimProductOuter = readFromBuffer<int32_t>(d);
     mDimProductInner = readFromBuffer<int32_t>(d);
@@ -110,7 +114,7 @@ MaxPoolPlugin::~MaxPoolPlugin()
 
 int32_t MaxPoolPlugin::getNbOutputs() const noexcept
 {
-    return 1;
+    return 2;
 }
 
 int32_t MaxPoolPlugin::initialize() noexcept
@@ -132,10 +136,22 @@ nvinfer1::DimsExprs MaxPoolPlugin::getOutputDimensions(
     int32_t index, nvinfer1::DimsExprs const* inputs, int32_t nbInputs, nvinfer1::IExprBuilder& exprBuilder) noexcept
 {
     ASSERT(nbInputs == 1);
-    ASSERT(index == 0);
+    std::cout << "INDEX: " << index << std::endl;
+    std::cout << "INPUT DIMENSIONS (FOR MAX POOL): " << inputs[0].d[0]->getConstantValue() << ", " << inputs[0].d[1]->getConstantValue() << ", " << inputs[0].d[2]->getConstantValue() << ", " << inputs[0].d[3]->getConstantValue() << std::endl;
+    // ASSERT(index == 0);
+
+    // return nvinfer1::DimsExprs([1,48,90,120]);
+    nvinfer1::DimsExprs outputDims;
+    outputDims.nbDims = 4;
+    outputDims.d[0] = exprBuilder.constant(1);
+    outputDims.d[1]  = exprBuilder.constant(48);
+    outputDims.d[2]  = exprBuilder.constant(90);
+    outputDims.d[3]  = exprBuilder.constant(120);
+    std::cout << "OUTPUT DIMENSIONS (FOR MAX POOL): " << outputDims.d[0]->getConstantValue() << ", " << outputDims.d[1]->getConstantValue() << ", " << outputDims.d[2]->getConstantValue() << ", " << outputDims.d[3]->getConstantValue() << std::endl;
+    return outputDims;
 
     // Dimensions are unchanged
-    return inputs[0];
+    // return inputs[0];
 }
 
 void MaxPoolPlugin::attachToContext(
@@ -243,7 +259,7 @@ void MaxPoolPlugin::serialize(void* buffer) const noexcept
     uint8_t* d = static_cast<uint8_t*>(buffer);
     uint8_t* const a = d;
 
-    writeToBuffer(d, mAxis);
+    // writeToBuffer(d, mAxis);
     writeToBuffer(d, mAxisSize);
     writeToBuffer(d, mDimProductOuter);
     writeToBuffer(d, mDimProductInner);
@@ -275,7 +291,7 @@ void MaxPoolPlugin::destroy() noexcept
 
 IPluginV2DynamicExt* MaxPoolPlugin::clone() const noexcept
 {
-    auto* plugin = new MaxPoolPlugin(mAxis);
+    auto* plugin = new MaxPoolPlugin(mCeilMode, mDilations, mKernelShape, mPads, mStrides);
     plugin->setPluginNamespace(mNamespace.c_str());
     plugin->mAxisSize = mAxisSize;
     plugin->mDimProductInner = mDimProductInner;
@@ -288,7 +304,7 @@ void MaxPoolPlugin::configurePlugin(nvinfer1::DynamicPluginTensorDesc const* in,
     nvinfer1::DynamicPluginTensorDesc const* out, int32_t nbOutputs) noexcept
 {
     ASSERT(nbInputs == 1);
-    ASSERT(nbOutputs == 1);
+    ASSERT(nbOutputs == 2);
 
     nvinfer1::Dims const& inDims = in[0].desc.dims;
     nvinfer1::Dims const& outDims = out[0].desc.dims;
@@ -301,12 +317,12 @@ void MaxPoolPlugin::configurePlugin(nvinfer1::DynamicPluginTensorDesc const* in,
     }
 
     // Check that axis is valid
-    if (mAxis < 0)
-    {
-        mAxis += inDims.nbDims;
-        ASSERT(mAxis >= 0);
-    }
-    ASSERT(inDims.nbDims > mAxis);
+    // if (mAxis < 0)
+    // {
+    //     mAxis += inDims.nbDims;
+    //     ASSERT(mAxis >= 0);
+    // }
+    // ASSERT(inDims.nbDims > mAxis);
 
     // samplesCommon::volume() requires that all dimensions are non-negative.
     // Even in the case of dynamic shapes, the plugin will be configured with
@@ -314,16 +330,16 @@ void MaxPoolPlugin::configurePlugin(nvinfer1::DynamicPluginTensorDesc const* in,
     // will be set correctly.
     if (std::all_of(inDims.d, inDims.d + inDims.nbDims, [](int32_t x) { return x >= 0; }))
     {
-        mDimProductOuter = samplesCommon::volume(inDims, 0, mAxis);
-        mAxisSize = inDims.d[mAxis];
-        mDimProductInner = samplesCommon::volume(inDims, mAxis + 1, inDims.nbDims);
+        // mDimProductOuter = samplesCommon::volume(inDims, 0, mAxis);
+        // mAxisSize = inDims.d[mAxis];
+        // mDimProductInner = samplesCommon::volume(inDims, mAxis + 1, inDims.nbDims);
     }
 }
 
 nvinfer1::DataType MaxPoolPlugin::getOutputDataType(
     int32_t index, nvinfer1::DataType const* inputTypes, int32_t nbInputs) const noexcept
 {
-    ASSERT(inputTypes && nbInputs == 1 && index == 0);
+    // ASSERT(inputTypes && nbInputs == 1 && index == 0);
     return inputTypes[0];
 }
 
@@ -332,7 +348,8 @@ size_t MaxPoolPlugin::getWorkspaceSize(nvinfer1::PluginTensorDesc const* inputs,
 {
     // 1st array to store the contents of the working axis
     // 2nd array to store an array of 1's
-    return 2 * inputs[0].dims.d[mAxis] * sizeof(float);
+    // return 2 * inputs[0].dims.d[mAxis] * sizeof(float);
+    return 2 * sizeof(float);
 }
 
 void MaxPoolPlugin::setPluginNamespace(char const* libNamespace) noexcept
@@ -351,8 +368,16 @@ MaxPoolPluginCreator::MaxPoolPluginCreator()
     mPluginAttributes.clear();
 
     // Consistent with the ONNX model attr fields
-    static auto const axisField = PluginField("axis", nullptr, PluginFieldType::kINT32, 1);
-    mPluginAttributes.emplace_back(axisField);
+    static auto const ceil_modeField = PluginField("ceil_mode", nullptr, PluginFieldType::kINT32, 1);
+    mPluginAttributes.emplace_back(ceil_modeField);
+    static auto const dilationsField = PluginField("dilations", nullptr, PluginFieldType::kINT32, 1);
+    mPluginAttributes.emplace_back(dilationsField);
+    static auto const kernel_shapeField = PluginField("kernel_shape", nullptr, PluginFieldType::kINT32, 1);
+    mPluginAttributes.emplace_back(kernel_shapeField);
+    static auto const padsField = PluginField("pads", nullptr, PluginFieldType::kINT32, 1);
+    mPluginAttributes.emplace_back(padsField);
+    static auto const stridesField = PluginField("strides", nullptr, PluginFieldType::kINT32, 1);
+    mPluginAttributes.emplace_back(stridesField);
 
     mFC.nbFields = mPluginAttributes.size();
     mFC.fields = mPluginAttributes.data();
@@ -387,18 +412,18 @@ void MaxPoolPluginCreator::setPluginNamespace(char const* libNamespace) noexcept
 IPluginV2DynamicExt* MaxPoolPluginCreator::createPlugin(char const* name, PluginFieldCollection const* fc) noexcept
 {
     // Set default value
-    int32_t axis = -1;
+    // int32_t axis = -1;
 
-    for (int32_t i = 0; i < fc->nbFields; i++)
-    {
-        if (!strcmp(fc->fields[i].name, "axis"))
-        {
-            ASSERT(fc->fields[i].type == PluginFieldType::kINT32);
-            axis = *static_cast<int32_t const*>(fc->fields[i].data);
-        }
-    }
+    // for (int32_t i = 0; i < fc->nbFields; i++)
+    // {
+    //     if (!strcmp(fc->fields[i].name, "axis"))
+    //     {
+    //         ASSERT(fc->fields[i].type == PluginFieldType::kINT32);
+    //         axis = *static_cast<int32_t const*>(fc->fields[i].data);
+    //     }
+    // }
 
-    MaxPoolPlugin* plugin = new MaxPoolPlugin(axis);
+    MaxPoolPlugin* plugin = new MaxPoolPlugin(0, 1, 2, 0, 2);
     plugin->setPluginNamespace(mNamespace.c_str());
 
     return plugin;

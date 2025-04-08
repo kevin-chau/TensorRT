@@ -31,7 +31,7 @@ class MaxPoolPlugin final : public nvinfer1::IPluginV2DynamicExt
 {
 public:
     MaxPoolPlugin() = delete;
-    MaxPoolPlugin(int32_t axis);
+    MaxPoolPlugin(int32_t ceil_mode, int32_t dilations, int32_t kernel_shape, int32_t pads, int32_t strides);
     MaxPoolPlugin(void const* serialData, size_t serialLength);
     ~MaxPoolPlugin() override;
 
@@ -101,11 +101,23 @@ private:
 
     cublasHandle_t mCublas;
 
+    //////////////
     // Attributes
-    // Axis along which to perform hardmax.
-    // Can be negative initially, but once configurePlugin() is called it will
-    // be converted to a positive axis.
-    int32_t mAxis{-1};
+    //////////////
+    // Ceiling mode. Use ceiling or floor when computing output shape
+    int32_t mCeilMode{0};
+
+    // Dilations
+    int32_t mDilations{1};
+
+    // Kernel Shape
+    int32_t mKernelShape{2};
+
+    // Pads
+    int32_t mPads{0};
+
+    // Strides
+    int32_t mStrides{2};
 };
 
 class MaxPoolPluginCreator : public nvinfer1::IPluginCreator
