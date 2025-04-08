@@ -85,17 +85,17 @@ constexpr char const* kMAXINDICESPOOL_NAME{"CustomMaxPoolIndices"};
 constexpr char const* kMAXINDICESPOOL_VERSION{"1"};
 } // namespace
 
-MaxPoolIndicesPlugin::MaxPoolIndicesPlugin(int32_t ceil_mode, int32_t dilations, int32_t kernel_shape, int32_t pads, int32_t strides)
+MaxPoolIndicesPlugin::MaxPoolIndicesPlugin(int32_t dilations, int32_t kernel_shape, int32_t strides)
 {
-    mCeilMode = ceil_mode;
+    std::cout << "MaxPoolIndicesPlugin constructor" << std::endl;
     mDilations = dilations;
     mKernelShape = kernel_shape;
-    mPads = pads;
     mStrides = strides;
 }
 
 MaxPoolIndicesPlugin::MaxPoolIndicesPlugin(void const* serialData, size_t serialLength)
 {
+    std::cout << "MaxPoolIndicesPlugin constructor2" << std::endl;
     uint8_t const* d = static_cast<uint8_t const*>(serialData);
     uint8_t const* a = d;
 
@@ -135,20 +135,25 @@ char const* MaxPoolIndicesPlugin::getPluginVersion() const noexcept
 nvinfer1::DimsExprs MaxPoolIndicesPlugin::getOutputDimensions(
     int32_t index, nvinfer1::DimsExprs const* inputs, int32_t nbInputs, nvinfer1::IExprBuilder& exprBuilder) noexcept
 {
+    std::cout << "start MaxPoolIndicesPlugin::getOutputDimensions" << std::endl;
     ASSERT(nbInputs == 1);
     std::cout << "INPUT DIMENSIONS (FOR MAX POOL INDICES): " << inputs[0].d[0]->getConstantValue() << ", " << inputs[0].d[1]->getConstantValue() << ", " << inputs[0].d[2]->getConstantValue() << ", " << inputs[0].d[3]->getConstantValue() << std::endl;
     // ASSERT(index == 0);
 
-    // nvinfer1::DimsExprs outputDims;
-    // outputDims.nbDims = 4;
-    // outputDims.d[0] = exprBuilder.constant(1);
-    // outputDims.d[1]  = exprBuilder.constant(48);
-    // outputDims.d[2]  = exprBuilder.constant(180);
-    // outputDims.d[3]  = exprBuilder.constant(240);
-    // return outputDims;
+    nvinfer1::DimsExprs outputDims;
+    outputDims.nbDims = 4;
+    outputDims.d[0] = inputs->d[0];
+    outputDims.d[1]  = exprBuilder.constant(inputs->d[1]->getConstantValue() * 1);
+    outputDims.d[2]  = inputs->d[2];
+    outputDims.d[3]  = inputs->d[3];
+    std::cout << "OUTPUT DIMENSIONS (FOR MAX POOL Indices): " << outputDims.d[0]->getConstantValue() << ", " << outputDims.d[1]->getConstantValue() << ", " << outputDims.d[2]->getConstantValue() << ", " << outputDims.d[3]->getConstantValue() << std::endl;
+    std::cout << "end MaxPoolIndicesPlugin::getOutputDimensions" << std::endl;
+    return outputDims;
+    // return *inputs;
 
     // Dimensions are unchanged by a 1x1 maxpool
-    return inputs[0];
+    // std::cout << "end MaxPoolIndicesPlugin::getOutputDimensions" << std::endl;
+    // return inputs[0];
 }
 
 void MaxPoolIndicesPlugin::attachToContext(
@@ -166,6 +171,7 @@ int32_t MaxPoolIndicesPlugin::enqueue(nvinfer1::PluginTensorDesc const* inputDes
     nvinfer1::PluginTensorDesc const* outputDesc, void const* const* inputs, void* const* outputs, void* workspace,
     cudaStream_t stream) noexcept
 {
+    std::cout << "ENQUEUE" << std::endl;
     if (inputDesc[0].type != nvinfer1::DataType::kFLOAT)
     {
         return -1;
@@ -252,6 +258,7 @@ size_t MaxPoolIndicesPlugin::getSerializationSize() const noexcept
 
 void MaxPoolIndicesPlugin::serialize(void* buffer) const noexcept
 {
+    std::cout << "SERIALIZE" << std::endl;
     // Same order as in deserialize()
     uint8_t* d = static_cast<uint8_t*>(buffer);
     uint8_t* const a = d;
@@ -288,18 +295,21 @@ void MaxPoolIndicesPlugin::destroy() noexcept
 
 IPluginV2DynamicExt* MaxPoolIndicesPlugin::clone() const noexcept
 {
-    auto* plugin = new MaxPoolIndicesPlugin(mCeilMode, mDilations, mKernelShape, mPads, mStrides);
+    std::cout << "CLONE" << std::endl;
+    auto* plugin = new MaxPoolIndicesPlugin(mDilations, mKernelShape, mStrides);
     plugin->setPluginNamespace(mNamespace.c_str());
     plugin->mAxisSize = mAxisSize;
     plugin->mDimProductInner = mDimProductInner;
     plugin->mDimProductOuter = mDimProductOuter;
     plugin->mCublas = mCublas;
+    std::cout << "END CLONE" << std::endl;
     return plugin;
 }
 
 void MaxPoolIndicesPlugin::configurePlugin(nvinfer1::DynamicPluginTensorDesc const* in, int32_t nbInputs,
     nvinfer1::DynamicPluginTensorDesc const* out, int32_t nbOutputs) noexcept
 {
+    std::cout << "configurePlugin" << std::endl;
     ASSERT(nbInputs == 1);
     ASSERT(nbOutputs == 2);
 
@@ -336,8 +346,24 @@ void MaxPoolIndicesPlugin::configurePlugin(nvinfer1::DynamicPluginTensorDesc con
 nvinfer1::DataType MaxPoolIndicesPlugin::getOutputDataType(
     int32_t index, nvinfer1::DataType const* inputTypes, int32_t nbInputs) const noexcept
 {
+    std::cout << "getOutputDataType()" << std::endl;
+    std::cout << "Input Data types: " << std::endl;
+    std::cout << int(inputTypes[0]) << std::endl;
+    std::cout << int(inputTypes[1]) << std::endl;
+    std::cout << int(inputTypes[2]) << std::endl;
+
     // ASSERT(inputTypes && nbInputs == 1 && index == 0);
-    return inputTypes[index];
+    // return inputTypes[1];
+    // return DataType::kFLOAT; // Indices are integers always
+    if (index == 0) 
+    {
+        // output tensor is float type
+        return DataType::kFLOAT;
+    }
+    else if (index == 1)
+    {
+        return DataType::kINT32; // indices are integers
+    }
 }
 
 size_t MaxPoolIndicesPlugin::getWorkspaceSize(nvinfer1::PluginTensorDesc const* inputs, int32_t nbInputs,
@@ -362,17 +388,14 @@ char const* MaxPoolIndicesPlugin::getPluginNamespace() const noexcept
 
 MaxPoolIndicesPluginCreator::MaxPoolIndicesPluginCreator()
 {
+    std::cout << "MaxPoolIndicesPluginCreator::MaxPoolIndicesPluginCreator" << std::endl;
     mPluginAttributes.clear();
 
     // Consistent with the ONNX model attr fields
-    static auto const ceil_modeField = PluginField("ceil_mode", nullptr, PluginFieldType::kINT32, 1);
-    mPluginAttributes.emplace_back(ceil_modeField);
     static auto const dilationsField = PluginField("dilations", nullptr, PluginFieldType::kINT32, 1);
     mPluginAttributes.emplace_back(dilationsField);
     static auto const kernel_shapeField = PluginField("kernel_shape", nullptr, PluginFieldType::kINT32, 1);
     mPluginAttributes.emplace_back(kernel_shapeField);
-    static auto const padsField = PluginField("pads", nullptr, PluginFieldType::kINT32, 1);
-    mPluginAttributes.emplace_back(padsField);
     static auto const stridesField = PluginField("strides", nullptr, PluginFieldType::kINT32, 1);
     mPluginAttributes.emplace_back(stridesField);
 
@@ -408,6 +431,7 @@ void MaxPoolIndicesPluginCreator::setPluginNamespace(char const* libNamespace) n
 
 IPluginV2DynamicExt* MaxPoolIndicesPluginCreator::createPlugin(char const* name, PluginFieldCollection const* fc) noexcept
 {
+    std::cout << "MaxPoolIndicesPluginCreator::createPlugin YO" << std::endl;
     // Set default value
     // int32_t axis = -1;
 
@@ -420,7 +444,7 @@ IPluginV2DynamicExt* MaxPoolIndicesPluginCreator::createPlugin(char const* name,
     //     }
     // }
 
-    MaxPoolIndicesPlugin* plugin = new MaxPoolIndicesPlugin(0, 1, 1, 0, 1);
+    MaxPoolIndicesPlugin* plugin = new MaxPoolIndicesPlugin(1, 1, 1);
     plugin->setPluginNamespace(mNamespace.c_str());
 
     return plugin;

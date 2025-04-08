@@ -143,10 +143,16 @@ nvinfer1::DimsExprs MaxPoolPlugin::getOutputDimensions(
     // return nvinfer1::DimsExprs([1,48,90,120]);
     nvinfer1::DimsExprs outputDims;
     outputDims.nbDims = 4;
-    outputDims.d[0] = exprBuilder.constant(1);
-    outputDims.d[1]  = exprBuilder.constant(48);
-    outputDims.d[2]  = exprBuilder.constant(90);
-    outputDims.d[3]  = exprBuilder.constant(120);
+    // outputDims.d[0] = exprBuilder.constant(1);
+    // outputDims.d[1]  = exprBuilder.constant(48);
+    // outputDims.d[2]  = exprBuilder.constant(90);
+    // outputDims.d[3]  = exprBuilder.constant(120);
+    outputDims.d[0] = inputs->d[0];
+    outputDims.d[1]  = exprBuilder.constant(inputs->d[1]->getConstantValue() * 1);
+    outputDims.d[2]  = exprBuilder.constant(inputs->d[2]->getConstantValue() / 2);
+    outputDims.d[3]  = exprBuilder.constant(inputs->d[3]->getConstantValue() / 2);
+
+
     std::cout << "OUTPUT DIMENSIONS (FOR MAX POOL): " << outputDims.d[0]->getConstantValue() << ", " << outputDims.d[1]->getConstantValue() << ", " << outputDims.d[2]->getConstantValue() << ", " << outputDims.d[3]->getConstantValue() << std::endl;
     return outputDims;
 
@@ -340,7 +346,16 @@ nvinfer1::DataType MaxPoolPlugin::getOutputDataType(
     int32_t index, nvinfer1::DataType const* inputTypes, int32_t nbInputs) const noexcept
 {
     // ASSERT(inputTypes && nbInputs == 1 && index == 0);
-    return inputTypes[0];
+    // return inputTypes[0];
+    if (index == 0) 
+    {
+        // output tensor is float type
+        return DataType::kFLOAT;
+    }
+    else if (index == 1)
+    {
+        return DataType::kINT32; // indices are integers
+    }
 }
 
 size_t MaxPoolPlugin::getWorkspaceSize(nvinfer1::PluginTensorDesc const* inputs, int32_t nbInputs,
